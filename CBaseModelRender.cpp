@@ -32,7 +32,7 @@ RwMatrix* CBaseModelRender::GetBoneMatrix(CPed* pPed, std::uint32_t nBoneId)
 	if (pAnimHierarcy) 
 	{
 		unsigned int nId = RpHAnimIDGetIndex(pAnimHierarcy, nBone);
-		return &pAnimHierarcy->pMatrixArray[nBone];
+		return &pAnimHierarcy->pMatrixArray[nId];
 	}
 
 	return nullptr;
@@ -66,8 +66,7 @@ void CBaseModelRender::RotateMatrix(RwMatrix* pMatrix, RwV3d vRotate)
 
 bool CBaseModelRender::AddModel(CBaseModelInfo* pModel, std::uint32_t nPedHandle, std::uint32_t nBoneId, std::uint8_t nSlot)
 {
-
-	if (nSlot > 7 || !pModel || !GetPedPointer(nPedHandle))
+	if (nSlot > 7 || !pModel || !GetPedPointer(nPedHandle) || nBoneId < 1 || nBoneId > 18)
 		return false;
 
 	tModelStruct model;
