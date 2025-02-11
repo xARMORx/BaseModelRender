@@ -16,7 +16,6 @@ CPed* CBaseModelRender::GetPedPointer(std::uint32_t nHandle)
 
 RwMatrix* CBaseModelRender::GetBoneMatrix(CPed* pPed, std::uint32_t nBoneId)
 {
-	nBoneId += 20;
 	if (!pPed)
 		return nullptr;
 
@@ -26,12 +25,14 @@ RwMatrix* CBaseModelRender::GetBoneMatrix(CPed* pPed, std::uint32_t nBoneId)
 		pPed->m_nPedFlags.bHasGroupDriveTask |= 0x400;
 	}
 
+	int nBone = pPed->m_apBones[nBoneId]->m_nNodeId;
+
 	RpHAnimHierarchy* pAnimHierarcy = GetAnimHierarchyFromSkinClump(pPed->m_pRwClump);
 
 	if (pAnimHierarcy) 
 	{
-		unsigned int nId = RpHAnimIDGetIndex(pAnimHierarcy, nBoneId) << 6;
-		return &pAnimHierarcy->pMatrixArray[nBoneId];
+		unsigned int nId = RpHAnimIDGetIndex(pAnimHierarcy, nBone);
+		return &pAnimHierarcy->pMatrixArray[nBone];
 	}
 
 	return nullptr;
