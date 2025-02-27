@@ -36,6 +36,10 @@ sol::table open(sol::this_state ts) {
         g_BaseModelRender->RemoveModel(nPedHandle, nSlot);
     });
 
+    myModule.set_function("setModelColor", [](std::uint32_t nPedHandle, std::uint8_t nSlot, std::uint8_t nR, std::uint8_t nG, std::uint8_t nB, std::uint8_t nA) {
+        g_BaseModelRender->SetModelColor(nPedHandle, nSlot, {nR, nG, nB, nA});
+    });
+
     myModule.set_function("removeAllModels", [](std::uint32_t nPedHandle) {
         g_BaseModelRender->RemoveAllModels(nPedHandle);
     });

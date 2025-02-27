@@ -10,6 +10,7 @@ private:
 		RwV3d vOffset;
 		RwV3d vRotate;
 		RwV3d vScale;
+		RwRGBA tColor;
 		union {
 			RwObject* pRwObject;
 			RpClump* pRwClump;
@@ -26,7 +27,6 @@ private:
 public:
 	CBaseModelRender();
 
-	
 	bool AddModel(CBaseModelInfo* pModel, std::uint32_t nPedHandle, std::uint32_t nBoneId, std::uint8_t nSlot);
 	void RemoveModel(std::uint32_t nPedHandle, std::uint8_t nSlot);
 	void RemoveAllModels(std::uint32_t nPedHandle);
@@ -34,5 +34,9 @@ public:
 	void SetModelOffset(std::uint32_t nPedHandle, std::uint8_t nSlot, const RwV3d& vOffset);
 	void SetModelScale(std::uint32_t nPedHandle, std::uint8_t nSlot, const RwV3d& vScale);
 	void RenderModels();
+	void SetModelColor(std::uint32_t nPedHandle, std::uint8_t nSlot, const RwRGBA& tColor);
 	void Cleanup();
+
+	static RpAtomic* ClumpsForAtomic(RpAtomic* pAtomic, void* pData);
+	static RpMaterial* GeometryForMaterials(RpMaterial* pMaterial, void* pData);
 };

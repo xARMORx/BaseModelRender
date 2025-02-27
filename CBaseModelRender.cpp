@@ -75,6 +75,7 @@ bool CBaseModelRender::AddModel(CBaseModelInfo* pModel, std::uint32_t nPedHandle
 	model.vScale = { 1.0f, 1.0f, 1.0f };
 	model.vOffset = { 0.f, 0.f, 0.f };
 	model.vRotate = { 0.f, 0.f, 0.f };
+	model.tColor = { 255, 255, 255, 255 };
 
 	RwMatrix* pMatrix = this->GetBoneMatrix(this->GetPedPointer(nPedHandle), nBoneId);
 
@@ -198,13 +199,20 @@ void CBaseModelRender::RenderModels()
 			RwMatrixScale(&pFrame->modelling, &it.second[i].vScale, rwCOMBINEPRECONCAT);
 			RwFrameUpdateObjects(pFrame);
 
-			if (it.second[i].pRwObject->type == 1)
+			if (it.second[i].pRwObject->type == 1) {
+				RpGeometry* pGeometry = it.second[i].pRwAtomic->geometry;
+				pGeometry->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
+				RpGeometryForAllMaterials(pGeometry, CBaseModelRender::GeometryForMaterials, &it.second[i].tColor);
+
 				it.second[i].pRwAtomic->renderCallBack(it.second[i].pRwAtomic);
+			}
 			else if (it.second[i].pRwObject->type == 2) {
+				RpClumpForAllAtomics(it.second[i].pRwClump, CBaseModelRender::ClumpsForAtomic, &it.second[i].tColor);
 				RpClumpRender(it.second[i].pRwClump);
 			}
 		}
 	}
+
 	RwRenderStateSet(rwRENDERSTATECULLMODE, RWRSTATE(RENDERSTATECULLMODE));
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, RWRSTATE(RENDERSTATEZTESTENABLE));
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, RWRSTATE(RENDERSTATEZWRITEENABLE));
@@ -212,7 +220,32 @@ void CBaseModelRender::RenderModels()
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, RWRSTATE(RENDERSTATEFOGENABLE));
 }
 
+void CBaseModelRender::SetModelColor(std::uint32_t nPedHandle, std::uint8_t nSlot, const RwRGBA& tColor)
+{
+	auto it = this->m_Players.find(nPedHandle);
+	if (it == this->m_Players.end())
+		return;
+
+	it->second[nSlot].tColor = tColor;
+}
+
 void CBaseModelRender::Cleanup()
 {
 	this->m_Players.clear();
+}
+
+RpAtomic* CBaseModelRender::ClumpsForAtomic(RpAtomic* pAtomic, void* pData)
+{
+	RpGeometry* pGeometry = pAtomic->geometry;
+	pGeometry->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
+	RpGeometryForAllMaterials(pGeometry, CBaseModelRender::GeometryForMaterials, pData);
+
+	return pAtomic;
+}
+
+RpMaterial* CBaseModelRender::GeometryForMaterials(RpMaterial* pMaterial, void* pData)
+{
+	pMaterial->color = *(RwRGBA*)(pData);
+
+	return pMaterial;
 }
