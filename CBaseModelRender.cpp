@@ -1,4 +1,5 @@
 ﻿#include "CBaseModelRender.h"
+#include "CPointLights.h"
 
 
 CBaseModelRender::CBaseModelRender()
@@ -72,10 +73,10 @@ bool CBaseModelRender::AddModel(CBaseModelInfo* pModel, std::uint32_t nPedHandle
 	tModelStruct model;
 	model.pModelInfo = pModel;
 	model.nBoneId = nBoneId;
-	model.vScale = { 1.0f, 1.0f, 1.0f };
-	model.vOffset = { 0.f, 0.f, 0.f };
-	model.vRotate = { 0.f, 0.f, 0.f };
-	model.tColor = { 255, 255, 255, 255 };
+	model.vScale = RwV3d{ 1.0f, 1.0f, 1.0f };
+	model.vOffset = RwV3d{ 0.f, 0.f, 0.f };
+	model.vRotate = RwV3d{ 0.f, 0.f, 0.f };
+	model.tColor = RwRGBA{ 255, 255, 255, 255 };
 
 	RwMatrix* pMatrix = this->GetBoneMatrix(this->GetPedPointer(nPedHandle), nBoneId);
 
@@ -158,13 +159,14 @@ void CBaseModelRender::RenderModels()
 	int RENDERSTATEZWRITEENABLE;
 	int RENDERSTATESHADEMODE;
 	int RENDERSTATEFOGENABLE;
+	int RENDERSTATEALPHATESTFUNCTIONREF;
 
 	RwRenderStateGet(rwRENDERSTATECULLMODE, RWRSTATE(&RENDERSTATECULLMODE));
 	RwRenderStateGet(rwRENDERSTATEZTESTENABLE, RWRSTATE(&RENDERSTATEZTESTENABLE));
 	RwRenderStateGet(rwRENDERSTATEZWRITEENABLE, RWRSTATE(&RENDERSTATEZWRITEENABLE));
 	RwRenderStateGet(rwRENDERSTATESHADEMODE, RWRSTATE(&RENDERSTATESHADEMODE));
 	RwRenderStateGet(rwRENDERSTATEFOGENABLE, RWRSTATE(&RENDERSTATEFOGENABLE));
-
+	
 	RwRenderStateSet(rwRENDERSTATECULLMODE, RWRSTATE(rwCULLMODECULLBACK));
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, RWRSTATE(TRUE));
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, RWRSTATE(TRUE));
@@ -203,6 +205,10 @@ void CBaseModelRender::RenderModels()
 				RpGeometry* pGeometry = it.second[i].pRwAtomic->geometry;
 				pGeometry->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
 				RpGeometryForAllMaterials(pGeometry, CBaseModelRender::GeometryForMaterials, &it.second[i].tColor);
+
+				CVector vPos = pMatrix->pos;
+				float fLight = CPointLights::GenerateLightsAffectingObject(&vPos, 0, nullptr) * 0.5f;
+				SetLightColoursForPedsCarsAndObjects(fLight);
 
 				it.second[i].pRwAtomic->renderCallBack(it.second[i].pRwAtomic);
 			}

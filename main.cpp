@@ -44,6 +44,10 @@ sol::table open(sol::this_state ts) {
         g_BaseModelRender->RemoveAllModels(nPedHandle);
     });
 
+    myModule.set_function("getGameBaseModel", [](std::uint32_t nModelIndex) {
+        return (std::uintptr_t)CModelInfo::GetModelInfo(nModelIndex);
+    });
+
     return myModule;
 }
 
