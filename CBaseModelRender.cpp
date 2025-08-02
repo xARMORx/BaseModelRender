@@ -1,5 +1,9 @@
 ﻿#include "CBaseModelRender.h"
 #include "CPointLights.h"
+#include "CTxdStore.h"
+#include "CKeyGen.h"
+#include "CFileLoader.h"
+#include "CVisibilityPlugins.h"
 
 
 CBaseModelRender::CBaseModelRender()
@@ -64,6 +68,75 @@ void CBaseModelRender::RotateMatrix(RwMatrix* pMatrix, RwV3d vRotate)
 	pMatrix->pos = vPos;
 }
 
+bool CBaseModelRender::LoadTxd(const std::string& szTxdPath, const std::uint16_t& nModelId, CAtomicModelInfo* pModelInfo)
+{
+	std::int32_t nSlot = CTxdStore::FindTxdSlot(szTxdPath.c_str());
+	if (nSlot != -1)
+	{
+		pModelInfo->m_nTxdIndex = nSlot;
+		CTxdStore::PushCurrentTxd();
+		CTxdStore::SetCurrentTxd(nSlot);
+		return true;
+	}
+	else
+	{
+		nSlot = CTxdStore::AddTxdSlot(szTxdPath.c_str());
+		CTxdStore::LoadTxd(nSlot, szTxdPath.c_str());
+		pModelInfo->m_nTxdIndex = nSlot;
+		CTxdStore::PushCurrentTxd();
+		CTxdStore::SetCurrentTxd(nSlot);
+		return true;
+	}
+	return false;
+}
+
+bool CBaseModelRender::LoadAtomicModel(const std::string& szDffPath, const std::uint16_t& nModelId, CAtomicModelInfo* pModelInfo)
+{
+	RwStream* pStream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMREAD, (void*)szDffPath.c_str());
+	if (pStream)
+	{
+		*reinterpret_cast<std::uint8_t*>(0x41B1D0) = 0xC3;
+
+		bool bUseCommonVehicleTexDictionary = false;
+		if (pModelInfo && (pModelInfo->m_nFlags & 0x8000u) != 0) {
+			bUseCommonVehicleTexDictionary = true;
+			CVehicleModelInfo::UseCommonVehicleTexDicationary();
+		}
+
+		if (RwStreamFindChunk(pStream, rwID_CLUMP, nullptr, nullptr)) {
+			RpClump* pReadClump = RpClumpStreamRead(pStream);
+			if (!pReadClump) {
+				if (bUseCommonVehicleTexDictionary) {
+					CVehicleModelInfo::StopUsingCommonVehicleTexDicationary();
+				}
+				*reinterpret_cast<std::uint8_t*>(0x41B1D0) = 0x64;
+				return false;
+			}
+			gAtomicModelId = nModelId;
+			RpClumpForAllAtomics(pReadClump, (RpAtomicCallBack)CBaseModelRender::SetRelatedModelInfoCB, pReadClump);
+			RpClumpDestroy(pReadClump);
+		}
+
+
+
+		if (pModelInfo && !pModelInfo->m_pRwObject)
+		{
+			*reinterpret_cast<std::uint8_t*>(0x41B1D0) = 0x64;
+			return false;
+		}
+
+		if (bUseCommonVehicleTexDictionary)
+			CVehicleModelInfo::StopUsingCommonVehicleTexDicationary();
+
+		RwStreamClose(pStream, nullptr);
+		pModelInfo->m_nRefCount = 0;
+		*reinterpret_cast<std::uint8_t*>(0x41B1D0) = 0x64;
+		return true;
+	}
+
+	return false;
+}
+
 
 bool CBaseModelRender::AddModel(CBaseModelInfo* pModel, std::uint32_t nPedHandle, std::uint32_t nBoneId, std::uint8_t nSlot)
 {
@@ -120,7 +193,15 @@ void CBaseModelRender::RemoveAllModels(std::uint32_t nPedHandle)
 	if (it == this->m_Players.end())
 		return;
 
+	for (auto& itt : it->second)
+	{
+		if (!itt.pModelInfo)
+			continue;
+		
+		this->m_CustomModels.erase(itt.pModelInfo->m_nTxdIndex);
+	}
 	this->m_Players.erase(it->first);
+	
 }
 
 void CBaseModelRender::RotateModel(std::uint32_t nPedHandle, std::uint8_t nSlot, const RwV3d& vRotate)
@@ -237,6 +318,34 @@ void CBaseModelRender::SetModelColor(std::uint32_t nPedHandle, std::uint8_t nSlo
 void CBaseModelRender::Cleanup()
 {
 	this->m_Players.clear();
+	this->m_CustomModels.clear();
+}
+
+std::uint16_t CBaseModelRender::LoadSimpleModel(const std::string& szDffPath, const std::string& szTxdPath)
+{
+	CAtomicModelInfo* pModelInfo = new CAtomicModelInfo;
+	pModelInfo = reinterpret_cast<CAtomicModelInfo * (__thiscall*)(CAtomicModelInfo*)>(0x4C5540)(pModelInfo);
+	pModelInfo->Init();
+	std::uint16_t nModelId = 20000 + static_cast<std::uint16_t>(this->m_CustomModels.size());
+	this->m_CustomModels.emplace(std::make_pair(nModelId, pModelInfo));
+	if (this->LoadTxd(szTxdPath, nModelId, pModelInfo))
+	{
+		pModelInfo->m_nKey = CKeyGen::GetUppercaseKey(szDffPath.c_str());
+		if (this->LoadAtomicModel(szDffPath, nModelId, pModelInfo))
+		{
+			return nModelId;
+		}
+	}
+	return -1;
+}
+
+CAtomicModelInfo* CBaseModelRender::GetCustomModel(std::uint16_t nModelId)
+{
+	auto it = this->m_CustomModels.find(nModelId);
+	if (it == this->m_CustomModels.end())
+		return nullptr;
+
+	return it->second;
 }
 
 RpAtomic* CBaseModelRender::ClumpsForAtomic(RpAtomic* pAtomic, void* pData)
@@ -254,3 +363,31 @@ RpMaterial* CBaseModelRender::GeometryForMaterials(RpMaterial* pMaterial, void* 
 
 	return pMaterial;
 }
+
+RpAtomic* CBaseModelRender::SetRelatedModelInfoCB(RpAtomic* atomic, void* data)
+{
+	char name[24] = { 0 };
+	bool bDamage = false;
+
+	auto mi = g_BaseModelRender->GetCustomModel(gAtomicModelId)->AsAtomicModelInfoPtr();
+	auto frameNodeName = reinterpret_cast<char*(__cdecl*)(RwFrame*)>(0x72FB30)((RwFrame*)atomic->object.object.parent);
+
+	GetNameAndDamage(frameNodeName, name, bDamage);
+
+	CVisibilityPlugins::SetAtomicRenderCallback(atomic, nullptr);
+
+	if (bDamage)
+		reinterpret_cast<void(__thiscall*)(CBaseModelInfo*, RpAtomic*)>(0x4C48D0)(mi->AsDamageAtomicModelInfoPtr(), atomic);
+	else
+		reinterpret_cast<void(__thiscall*)(CBaseModelInfo*, RpAtomic*)>(0x4C4360)(mi, atomic);
+
+	RpClumpRemoveAtomic(static_cast<RpClump*>(data), atomic);
+
+	RpAtomicSetFrame(atomic, RwFrameCreate());
+
+	CVisibilityPlugins::SetAtomicId(atomic, gAtomicModelId);
+
+	return atomic;
+}
+
+CBaseModelRender* g_BaseModelRender = new CBaseModelRender;

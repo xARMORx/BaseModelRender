@@ -1,7 +1,5 @@
 #include "main.h"
 
-CBaseModelRender* g_BaseModelRender = new CBaseModelRender;
-
 sol::table open(sol::this_state ts) {
     sol::state_view lua{ ts };
     lua["VERSION"] = 0.1;
@@ -46,6 +44,16 @@ sol::table open(sol::this_state ts) {
 
     myModule.set_function("getGameBaseModel", [](std::uint32_t nModelIndex) {
         return (std::uintptr_t)CModelInfo::GetModelInfo(nModelIndex);
+    });
+
+    myModule.set_function("loadSimpleModel", [](const std::string& szDffPath, const std::string& szTxdPath)
+    {
+        return g_BaseModelRender->LoadSimpleModel(szDffPath, szTxdPath);
+    });
+
+    myModule.set_function("getSimpleBaseModel", [](std::uint16_t nCustomModelId)
+    {
+        return (std::uintptr_t)(g_BaseModelRender->GetCustomModel(nCustomModelId));
     });
 
     return myModule;
